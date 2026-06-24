@@ -1,0 +1,62 @@
+cluster-tools/
+│
+├── README.md
+├── LICENSE
+├── .gitignore
+│
+├── docs/
+│   ├── installation.md
+│   ├── cluster_architecture.md
+│   ├── users.md
+│   ├── gpu_nodes.md
+│   └── troubleshooting.md
+│
+├── slurm/
+│   ├── slurm.conf
+│   ├── gres/
+│   │   ├── shuanshuan.conf
+│   │   ├── tohui.conf
+│   │   └── xinxin.conf
+│   ├── cgroup.conf
+│   └── deploy.sh
+│
+├── templates/
+│   ├── cpu/
+│   │   ├── basic.slurm
+│   │   ├── array.slurm
+│   │   └── mpi.slurm
+│   │
+│   ├── gpu/
+│   │   ├── pytorch.slurm
+│   │   ├── tensorflow.slurm
+│   │   ├── multi_gpu.slurm
+│   │   └── benchmark.slurm
+│   │
+│   └── seismology/
+│       ├── seisbench.slurm
+│       ├── phasenet.slurm
+│       ├── repeater_detection.slurm
+│       └── ambient_noise.slurm
+│
+├── scripts/
+│   ├── deploy_config.sh
+│   ├── cluster_status.sh
+│   ├── gpu_status.sh
+│   ├── sync_logs.sh
+│   ├── benchmark_gpu.py
+│   └── benchmark_cpu.py
+│
+├── python/
+│   ├── slurm_utils.py
+│   ├── job_monitor.py
+│   ├── benchmark.py
+│   └── notifications.py
+│
+├── examples/
+│   ├── pytorch_example.py
+│   ├── tensorflow_example.py
+│   ├── seisbench_example.py
+│   └── distributed_training.py
+│
+└── logs/
+    └── README.md
