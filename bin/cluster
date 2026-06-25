@@ -1,0 +1,43 @@
+#!/bin/bash
+
+COMMAND="$1"
+shift
+
+case "$COMMAND" in
+
+    deploy)
+        exec "$(dirname "$0")/../lib/deploy.sh" "$@"
+        ;;
+
+    status)
+        exec "$(dirname "$0")/../lib/status.sh" "$@"
+        ;;
+
+    submit)
+        exec "$(dirname "$0")/../lib/submit.sh" "$@"
+        ;;
+
+    gpu)
+        exec "$(dirname "$0")/../lib/gpu.sh" "$@"
+        ;;
+
+    doctor)
+        exec "$(dirname "$0")/../lib/doctor.sh" "$@"
+        ;;
+
+    benchmark)
+        exec "$(dirname "$0")/../lib/benchmark.sh" "$@"
+        ;;
+
+    *)
+        echo
+        echo "Available commands:"
+        echo
+        echo " cluster deploy"
+        echo " cluster status"
+        echo " cluster submit"
+        echo " cluster gpu"
+        echo " cluster doctor"
+        echo " cluster benchmark"
+        ;;
+esac
