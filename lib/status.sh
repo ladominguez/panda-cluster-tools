@@ -48,10 +48,14 @@ printf "%-12s %-10s %-5s %-8s %-10s\n" \
 printf "%-12s %-10s %-5s %-8s %-10s\n" \
     "------------" "----------" "-----" "--------" "----------"
 
+gpu=0
+
 while read NODE STATE CPU MEM GPU
 do
+    echo "GPU $gpu : $NAME"
     printf "%-12s %-10s %-5s %-8s %-10s\n" \
         "$NODE" "$STATE" "$CPU" "${MEM}M" "$GPU"
+    ((gpu++))
 done < <(
     sinfo -N -h -o "%N %T %c %m %G"
 )

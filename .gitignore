@@ -1,0 +1,21 @@
+# Backup files
+*~
+*.bak
+*.swp
+*.tmp
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Temporary Slurm scripts
+*.slurm.tmp

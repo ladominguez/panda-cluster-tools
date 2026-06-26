@@ -263,3 +263,30 @@ for_each_node()
         "${cmd[@]}" "$node"
     done
 }
+
+
+############################################################
+# Progress bar
+############################################################
+
+progress_bar()
+{
+    local current="$1"
+    local total="$2"
+    local width="${3:-30}"
+
+    (( total == 0 )) && total=1
+
+    local filled=$(( current * width / total ))
+    local empty=$(( width - filled ))
+
+    printf "["
+
+    printf "%${filled}s" "" | tr ' ' '█'
+    printf "%${empty}s" "" | tr ' ' '░'
+
+    printf "]"
+}
+
+
+
