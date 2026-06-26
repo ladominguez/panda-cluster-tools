@@ -18,7 +18,12 @@ LOCAL_NODE=$(hostname -s)
 # Load configuration
 ############################################################
 
-source "$CONFIG_DIR/cluster.conf"
+CONFIG_FILE="$CONFIG_DIR/cluster.conf"
+
+[[ -f "$CONFIG_FILE" ]] \
+    || { echo "Cannot find $CONFIG_FILE"; exit 1; }
+
+source "$CONFIG_FILE"
 
 ############################################################
 # SSH
@@ -189,12 +194,14 @@ wait_cluster()
     local timeout=30
     local elapsed=0
 
+    GOOD_STATES="idle|mixed|alloc"
+
     while (( elapsed < timeout ))
     do
 
         local bad
 
-        bad=$(sinfo -h -o "%T" | grep -vcE 'idle|mixed|alloc')
+        bad=$(sinfo -h -o "%T" | grep -vcE "GOOD_STATES")
 
         [[ "$bad" -eq 0 ]] && return 0
 
@@ -243,4 +250,16 @@ banner()
     echo
 }
 
+############################################################
+# Execute on every node
+############################################################
 
+for_each_node()
+{
+    local cmd=("$@")
+
+    for node in "${NODES[@]}"
+    do
+        "${cmd[@]}" "$node"
+    done
+}
