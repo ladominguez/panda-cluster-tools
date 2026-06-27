@@ -17,6 +17,7 @@ ENV="${DEFAULT_ENV:-base}"
 CPUS="${DEFAULT_CPUS:-1}"
 MEM="${DEFAULT_MEM:-8G}"
 
+ALL_NODES=0
 JOB_NAME=""
 SCRIPT=""
 NODE=""
@@ -35,6 +36,8 @@ Usage:
     panda submit program.py [options]
 
 Options
+
+    --node NAME        Submit to a specific node
 
     --gpu MODEL         GPU type (5090, 1070, quadro)
 
@@ -74,6 +77,16 @@ do
             CPUS="$2"
             shift 2
             ;;
+	--node)
+            NODE="$2"
+            shift 2
+            ;;
+
+--all)
+    ALL_NODES=1
+    shift
+    ;;
+
 
         --mem)
             MEM="$2"
@@ -128,6 +141,26 @@ done
 if [[ -z "$JOB_NAME" ]]
 then
     JOB_NAME=$(basename "$SCRIPT" .py)
+fi
+
+COUNT=0
+
+[[ -n "$NODE" ]] && ((COUNT++))
+[[ -n "$GPU" ]] && ((COUNT++))
+[[ "$ALL_NODES" -eq 1 ]] && ((COUNT++))
+
+if [[ $COUNT -gt 1 ]]
+then
+    die "Use only one of --node, --gpu or --all."
+fi
+
+############################################################
+# Node selection
+############################################################
+
+if [[ -n "$NODE" ]]
+then
+    PARTITION="$NODE"
 fi
 
 ############################################################
@@ -195,10 +228,14 @@ echo "Environment   : $ENV"
 echo "CPUs          : $CPUS"
 echo "Memory        : $MEM"
 
+if [[ -n "$NODE" ]]
+then
+    echo "Node          : $NODE"
+fi
+
 if [[ -n "$GPU" ]]
 then
     echo "GPU           : ${GPU_DESCRIPTION[$GPU]}"
-    echo "Node          : $NODE"
 fi
 
 echo
