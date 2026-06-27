@@ -154,15 +154,7 @@ then
     die "Use only one of --node, --gpu or --all."
 fi
 
-############################################################
-# Node selection
-############################################################
-
-if [[ -n "$NODE" ]]
-then
-    PARTITION="$NODE"
-fi
-
+SCRIPT=$(realpath "$SCRIPT")
 ############################################################
 # GPU mapping
 ############################################################
@@ -175,7 +167,6 @@ then
     [[ -n "$NODE" ]] \
         || die "Unknown GPU '$GPU'."
 
-    PARTITION="$NODE"
 
 fi
 
@@ -206,7 +197,11 @@ fi
 
 cat >> "$TMPFILE" <<EOF
 
-source "$CONDA_INIT"
+
+# Initialize Conda on the execution node
+
+# Initialize Conda
+eval "\$(conda shell.bash hook)"
 
 conda activate "$ENV"
 
@@ -248,7 +243,10 @@ OUTPUT=$(sbatch "$TMPFILE")
 
 STATUS=$?
 
-rm -f "$TMPFILE"
+echo "SBATCH script saved as:"
+echo "$TMPFILE"
+
+#rm -f "$TMPFILE"
 
 [[ $STATUS -eq 0 ]] \
     || die "Submission failed."
