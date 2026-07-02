@@ -22,6 +22,7 @@ JOB_NAME=""
 SCRIPT=""
 NODE=""
 PARTITION="${DEFAULT_PARTITION:-cpu}"
+WAIT=0
 
 ############################################################
 # Usage
@@ -48,6 +49,8 @@ Options
     --mem SIZE          Memory (e.g. 16G)
 
     --job-name NAME     Job name
+
+    --wait              Wait for the job to finish and retrieve the log
 
     -h, --help          Show this help
 
@@ -82,6 +85,10 @@ do
             shift 2
             ;;
 
+       --wait)
+            WAIT=1
+            shift
+            ;;
 --all)
     ALL_NODES=1
     shift
@@ -259,3 +266,32 @@ echo
 echo "Job ID        : $JOBID"
 echo "Log file      : $LOG_DIR/slurm-${JOBID}.out"
 echo
+
+if [[ $WAIT -eq 1 ]]
+then
+    info "Waiting for job to finish..."
+
+    while squeue -h -j "$JOBID" | grep -q .
+    do
+       sleep 2
+    done
+fi
+
+info "Retrieving log..."
+
+rsync -a \
+    "$NODE:$LOGFILE" \
+    "$HOME/clusterlogs/Logs/"
+
+success "Log copied."
+
+echo
+echo "Local log:"
+echo "    $HOME/clusterlogs/Logs/slurm-${JOBID}.out"
+
+mkdir -p "$HOME/.panda/jobs"
+
+cat > "$HOME/.panda/jobs/${JOBID}.conf" <<EOF
+NODE=$NODE
+LOGFILE=$LOG_DIR/slurm-${JOBID}.out
+EOF

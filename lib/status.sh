@@ -48,17 +48,34 @@ printf "%-12s %-10s %-5s %-8s %-10s\n" \
 printf "%-12s %-10s %-5s %-8s %-10s\n" \
     "------------" "----------" "-----" "--------" "----------"
 
-gpu=0
 
-while read NODE STATE CPU MEM GPU
+while IFS= read -r node
 do
-    echo "GPU $gpu : $NAME"
-    printf "%-12s %-10s %-5s %-8s %-10s\n" \
-        "$NODE" "$STATE" "$CPU" "${MEM}M" "$GPU"
-    ((gpu++))
-done < <(
-    sinfo -N -h -o "%N %T %c %m %G"
-)
+    scontrol show node "$node" | awk '
+        /State=/ {
+            match($0,/State=([^ ]+)/,a)
+            split(a[1],b,"+")
+            state=b[1]
+        }
+        /CPUTot=/ {
+            match($0,/CPUTot=([0-9]+)/,a)
+            cpu=a[1]
+        }
+        /RealMemory=/ {
+            match($0,/RealMemory=([0-9]+)/,a)
+            mem=a[1]
+        }
+        /Gres=/ {
+            match($0,/Gres=([^ ]+)/,a)
+            gpu=a[1]
+        }
+        END {
+            printf "%-12s %-10s %-5s %-8s %-10s\n", "'"$node"'", state, cpu, mem "M", gpu
+        }
+    '
+done < <(printf "%s\n" "${NODES[@]}")
+
+
 
 ############################################################
 # Jobs
