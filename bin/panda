@@ -29,15 +29,20 @@ case "$COMMAND" in
         exec "$(dirname "$0")/../lib/benchmark.sh" "$@"
         ;;
 
+    fetch)
+        exec "$(dirname "$0")/../fetch.sh" "$@"
+    	;;
+
     *)
         echo
         echo "Available commands:"
         echo
-        echo " cluster deploy"
-        echo " cluster status"
-        echo " cluster submit"
-        echo " cluster gpu"
-        echo " cluster doctor"
-        echo " cluster benchmark"
+        echo " panda deploy"
+        echo " panda status"
+        echo " panda submit"
+	echo " panda fetch"
+        echo " panda gpu"
+        echo " panda doctor"
+        echo " panda benchmark"
         ;;
 esac

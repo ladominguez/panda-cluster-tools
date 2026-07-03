@@ -259,6 +259,7 @@ echo "$TMPFILE"
     || die "Submission failed."
 
 JOBID=$(echo "$OUTPUT" | awk '{print $4}')
+LOGFILE="$LOG_DIR/slurm-${JOBID}.out"
 
 success "Job submitted."
 
@@ -267,27 +268,35 @@ echo "Job ID        : $JOBID"
 echo "Log file      : $LOG_DIR/slurm-${JOBID}.out"
 echo
 
+
 if [[ $WAIT -eq 1 ]]
 then
     info "Waiting for job to finish..."
 
     while squeue -h -j "$JOBID" | grep -q .
     do
-       sleep 2
+        sleep 2
     done
+
+    info "Retrieving log..."
+
+    if [[ "$NODE" == "$HOSTNAME" ]]
+    then
+       info "Log already available locally."
+    else
+       rsync -a \
+          "$NODE:$LOGFILE" \
+          "$HOME/clusterlogs/Logs/"
+    fi
+
+
+    success "Log copied."
+
+    echo
+    echo "Local log:"
+    echo "    $HOME/clusterlogs/Logs/slurm-${JOBID}.out"
 fi
 
-info "Retrieving log..."
-
-rsync -a \
-    "$NODE:$LOGFILE" \
-    "$HOME/clusterlogs/Logs/"
-
-success "Log copied."
-
-echo
-echo "Local log:"
-echo "    $HOME/clusterlogs/Logs/slurm-${JOBID}.out"
 
 mkdir -p "$HOME/.panda/jobs"
 

@@ -1,0 +1,3 @@
+panda submit pytorch_train.py  --node xinxin      --env ai-legacy  --job-name pytorch-test 
+panda submit pytorch_train.py  --node tohui       --env ai-legacy  --job-name pytorch-test 
+panda submit pytorch_train.py  --node shuanshuan  --env ai-legacy  --job-name pytorch-test 
