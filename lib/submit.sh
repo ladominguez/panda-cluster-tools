@@ -132,6 +132,7 @@ do
 
 done
 
+
 ############################################################
 # Validate
 ############################################################
@@ -142,12 +143,43 @@ done
 [[ -f "$SCRIPT" ]] \
     || die "Cannot find '$SCRIPT'."
 
-[[ "$SCRIPT" == *.py ]] \
-    || die "Version 1 only supports Python programs."
+
+SCRIPT=$(realpath "$SCRIPT")
+
+LOCAL_ROOT="${PATH_MAP[$HOSTNAME]}"
+REMOTE_ROOT="${PATH_MAP[$NODE]}"
+
+if [[ -n "$LOCAL_ROOT" && -n "$REMOTE_ROOT" ]]; then
+    SCRIPT="${SCRIPT/$LOCAL_ROOT/$REMOTE_ROOT}"
+fi
+
+case "$SCRIPT" in
+    *.py)
+        RUN_COMMAND="python \"$SCRIPT\""
+        ;;
+
+    *.sh)
+        RUN_COMMAND="bash \"$SCRIPT\""
+        ;;
+
+    *.jl)
+        RUN_COMMAND="julia \"$SCRIPT\""
+        ;;
+
+    *)
+        if [[ -x "$SCRIPT" ]]; then
+            RUN_COMMAND="\"$SCRIPT\""
+        else
+            die "Unsupported file type: $(basename "$SCRIPT")"
+        fi
+        ;;
+esac
+
 
 if [[ -z "$JOB_NAME" ]]
 then
-    JOB_NAME=$(basename "$SCRIPT" .py)
+    JOB_NAME=$(basename "$SCRIPT")
+    JOB_NAME="${JOB_NAME%.*}"
 fi
 
 COUNT=0
@@ -161,7 +193,6 @@ then
     die "Use only one of --node, --gpu or --all."
 fi
 
-SCRIPT=$(realpath "$SCRIPT")
 ############################################################
 # GPU mapping
 ############################################################
@@ -190,6 +221,7 @@ cat > "$TMPFILE" <<EOF
 #SBATCH --cpus-per-task=$CPUS
 #SBATCH --mem=$MEM
 #SBATCH --output=$LOG_DIR/slurm-%j.out
+#SBATCH --chdir=$(dirname "$SCRIPT")
 EOF
 
 if [[ -n "$NODE" ]]
@@ -210,9 +242,12 @@ cat >> "$TMPFILE" <<EOF
 # Initialize Conda
 eval "\$(conda shell.bash hook)"
 
+
 conda activate "$ENV"
 
-python "$SCRIPT"
+cd "$(dirname "$SCRIPT")" || exit 1
+
+$RUN_COMMAND
 
 EOF
 
