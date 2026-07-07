@@ -5,6 +5,8 @@
 # Submit a Python job to the Panda Cluster
 #
 
+
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
@@ -234,6 +236,15 @@ EOF
 
 fi
 
+
+PANDA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+PANDA_REMOTE="$PANDA_ROOT"
+
+if [[ -n "$LOCAL_ROOT" && -n "$REMOTE_ROOT" ]]; then
+    PANDA_REMOTE="${PANDA_ROOT/$LOCAL_ROOT/$REMOTE_ROOT}"
+fi
+
 cat >> "$TMPFILE" <<EOF
 
 
@@ -247,7 +258,26 @@ conda activate "$ENV"
 
 cd "$(dirname "$SCRIPT")" || exit 1
 
+type -a panda
+
+START=\$(date +%s)
+
 $RUN_COMMAND
+
+
+END=\$(date +%s)
+RUNTIME=\$((END-START))
+
+
+"$PANDA_REMOTE/bin/panda" finish \
+    "\$SLURM_JOB_ID" \
+    "\$EXITCODE" \
+    "\$RUNTIME"
+
+EXITCODE=$?
+
+exit "\$EXITCODE"
+
 
 EOF
 
@@ -296,6 +326,22 @@ echo "$TMPFILE"
 JOBID=$(echo "$OUTPUT" | awk '{print $4}')
 LOGFILE="$LOG_DIR/slurm-${JOBID}.out"
 
+NODE_NAME="${NODE:-auto}"
+
+printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+    "$JOBID" \
+    "$(date '+%Y-%m-%d %H:%M:%S')" \
+    "$JOB_NAME" \
+    "$NODE_NAME" \
+    "$CPUS" \
+    "$MEM" \
+    "$PWD" \
+    "$SCRIPT" \
+    "$LOGFILE" \
+>> "$HISTORY_FILE"
+
+
+
 success "Job submitted."
 
 echo
@@ -333,9 +379,8 @@ then
 fi
 
 
-mkdir -p "$HOME/.panda/jobs"
-
-cat > "$HOME/.panda/jobs/${JOBID}.conf" <<EOF
+cat > "$JOB_DIR/${JOBID}.conf" <<EOF
 NODE=$NODE
 LOGFILE=$LOG_DIR/slurm-${JOBID}.out
 EOF
+

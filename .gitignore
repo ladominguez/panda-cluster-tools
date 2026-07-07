@@ -19,3 +19,4 @@ __pycache__/
 
 # Temporary Slurm scripts
 *.slurm.tmp
+var/

@@ -29,9 +29,17 @@ case "$COMMAND" in
         exec "$(dirname "$0")/../lib/benchmark.sh" "$@"
         ;;
 
+    finish)
+        exec "$(dirname "$0")/../lib/finish.sh" "$@"
+        ;;
+
     fetch)
-        exec "$(dirname "$0")/../fetch.sh" "$@"
+        exec "$(dirname "$0")/../lib/fetch.sh" "$@"
     	;;
+
+    history)
+        exec "$(dirname "$0")/../lib/history.sh" "$@"
+        ;;
 
     *)
         echo
@@ -41,6 +49,7 @@ case "$COMMAND" in
         echo " panda status"
         echo " panda submit"
 	echo " panda fetch"
+	echo " panda finish"
         echo " panda gpu"
         echo " panda doctor"
         echo " panda benchmark"
