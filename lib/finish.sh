@@ -7,16 +7,26 @@ JOBID="$1"
 EXITCODE="$2"
 ELAPSED="$3"
 
-JOBFILE="$PANDA_VAR/jobs/${JOBID}.conf"
+STATUS="FAILED"
 
-{
-    echo "EXITCODE=$EXITCODE"
-    echo "RUNTIME=$ELAPSED"
-    echo "FINISHED=$(date '+%Y-%m-%dT%H:%M:%S')"
+if [[ "$EXITCODE" -eq 0 ]]; then
+    STATUS="COMPLETED"
+fi
 
-    if [[ "$EXITCODE" -eq 0 ]]; then
-        echo "STATUS=COMPLETED"
-    else
-        echo "STATUS=FAILED"
-    fi
-} >> "$JOBFILE"
+if [[ "$(hostname -s)" == "$CONTROLLER" ]]; then
+    "$PANDA_HOME/bin/panda" update-history \
+        "$JOBID" \
+        "$STATUS" \
+        "$EXITCODE" \
+        "$ELAPSED"
+else
+    ssh "${SSH_OPTS[@]}" "$CONTROLLER" \
+        "$PANDA_HOME/bin/panda update-history \
+            '$JOBID' \
+            '$STATUS' \
+            '$EXITCODE' \
+            '$ELAPSED'"
+fi
+
+
+

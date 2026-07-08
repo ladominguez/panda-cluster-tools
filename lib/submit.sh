@@ -264,6 +264,7 @@ START=\$(date +%s)
 
 $RUN_COMMAND
 
+EXITCODE=\$?
 
 END=\$(date +%s)
 RUNTIME=\$((END-START))
@@ -274,7 +275,6 @@ RUNTIME=\$((END-START))
     "\$EXITCODE" \
     "\$RUNTIME"
 
-EXITCODE=$?
 
 exit "\$EXITCODE"
 
@@ -328,9 +328,13 @@ LOGFILE="$LOG_DIR/slurm-${JOBID}.out"
 
 NODE_NAME="${NODE:-auto}"
 
-printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
     "$JOBID" \
     "$(date '+%Y-%m-%d %H:%M:%S')" \
+    "-" \
+    "PENDING" \
+    "-" \
+    "-" \
     "$JOB_NAME" \
     "$NODE_NAME" \
     "$CPUS" \

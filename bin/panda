@@ -41,6 +41,10 @@ case "$COMMAND" in
         exec "$(dirname "$0")/../lib/history.sh" "$@"
         ;;
 
+    update-history)
+        exec "$(dirname "$0")/../lib/update-history.sh" "$@"
+        ;;
+
     *)
         echo
         echo "Available commands:"

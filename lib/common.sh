@@ -20,8 +20,8 @@ HISTORY_FILE="$PANDA_VAR/history.tsv"
 mkdir -p "$JOB_DIR"
 
 if [[ ! -f "$HISTORY_FILE" ]]; then
-    printf "JobID\tSubmitTime\tJobName\tNode\tCPUs\tMem\tWorkDir\tScript\tLogFile\n" \
-        > "$HISTORY_FILE"
+    printf "JobID\tSubmitTime\tFinishTime\tStatus\tExitCode\tRuntime\tJobName\tNode\tCPUs\tMem\tWorkDir\tScript\tLogFile\n" \
+    > "$HISTORY_FILE"
 fi
 
 PROJECT_ROOT="$(cd "$COMMON_DIR/.." && pwd)"
