@@ -1,0 +1,1 @@
+sudo scontrol update NodeName=shuanshuan,tohui,xinxin State=RESUME
