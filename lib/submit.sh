@@ -145,27 +145,44 @@ done
 [[ -f "$SCRIPT" ]] \
     || die "Cannot find '$SCRIPT'."
 
+LOCAL_SCRIPT=$(realpath "$SCRIPT")
+REMOTE_SCRIPT="$LOCAL_SCRIPT"
 
-SCRIPT=$(realpath "$SCRIPT")
-
+#
+# Translate research paths
+#
 LOCAL_ROOT="${PATH_MAP[$HOSTNAME]}"
 REMOTE_ROOT="${PATH_MAP[$NODE]}"
 
 if [[ -n "$LOCAL_ROOT" && -n "$REMOTE_ROOT" ]]; then
-    SCRIPT="${SCRIPT/$LOCAL_ROOT/$REMOTE_ROOT}"
+    REMOTE_SCRIPT="${REMOTE_SCRIPT/$LOCAL_ROOT/$REMOTE_ROOT}"
 fi
 
-case "$SCRIPT" in
+#
+# Translate Panda repository paths
+#
+LOCAL_PANDA_ROOT="$PANDA_HOME"
+REMOTE_PANDA_ROOT="${PANDA_ROOT[$NODE]}"
+
+if [[ "$REMOTE_SCRIPT" == "$LOCAL_PANDA_ROOT/"* ]]; then
+    REMOTE_SCRIPT="${REMOTE_SCRIPT/$LOCAL_PANDA_ROOT/$REMOTE_PANDA_ROOT}"
+fi
+
+REMOTE_WORKDIR=$(dirname "$REMOTE_SCRIPT")
+PANDA_REMOTE="${PANDA_ROOT[$NODE]}"
+
+
+case "$REMOTE_SCRIPT" in
     *.py)
-        RUN_COMMAND="python \"$SCRIPT\""
+	RUN_COMMAND="python \"$REMOTE_SCRIPT\""
         ;;
 
     *.sh)
-        RUN_COMMAND="bash \"$SCRIPT\""
+	RUN_COMMAND="bash \"$REMOTE_SCRIPT\""
         ;;
 
     *.jl)
-        RUN_COMMAND="julia \"$SCRIPT\""
+	RUN_COMMAND="julia \"$REMOTE_SCRIPT\""
         ;;
 
     *)
@@ -180,7 +197,7 @@ esac
 
 if [[ -z "$JOB_NAME" ]]
 then
-    JOB_NAME=$(basename "$SCRIPT")
+    JOB_NAME=$(basename "$LOCAL_SCRIPT")
     JOB_NAME="${JOB_NAME%.*}"
 fi
 
@@ -223,7 +240,7 @@ cat > "$TMPFILE" <<EOF
 #SBATCH --cpus-per-task=$CPUS
 #SBATCH --mem=$MEM
 #SBATCH --output=$LOG_DIR/slurm-%j.out
-#SBATCH --chdir=$(dirname "$SCRIPT")
+#SBATCH --chdir=$REMOTE_WORKDIR
 EOF
 
 if [[ -n "$NODE" ]]
@@ -237,14 +254,6 @@ EOF
 fi
 
 
-PANDA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-PANDA_REMOTE="$PANDA_ROOT"
-
-if [[ -n "$LOCAL_ROOT" && -n "$REMOTE_ROOT" ]]; then
-    PANDA_REMOTE="${PANDA_ROOT/$LOCAL_ROOT/$REMOTE_ROOT}"
-fi
-
 cat >> "$TMPFILE" <<EOF
 
 
@@ -256,7 +265,7 @@ eval "\$(conda shell.bash hook)"
 
 conda activate "$ENV"
 
-cd "$(dirname "$SCRIPT")" || exit 1
+cd "$REMOTE_WORKDIR" || exit 1
 
 type -a panda
 
@@ -323,11 +332,27 @@ echo "$TMPFILE"
 [[ $STATUS -eq 0 ]] \
     || die "Submission failed."
 
+
 JOBID=$(echo "$OUTPUT" | awk '{print $4}')
 LOGFILE="$LOG_DIR/slurm-${JOBID}.out"
-
 NODE_NAME="${NODE:-auto}"
 
+#
+# Save metadata locally
+#
+cat > "$JOB_DIR/${JOBID}.conf" <<EOF
+NODE=$NODE
+LOGFILE=$LOG_DIR/slurm-${JOBID}.out
+EOF
+
+#
+# Copy metadata to the execution node
+#
+push_job_metadata "$JOBID" "$NODE"
+
+#
+# Append to history
+#
 printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
     "$JOBID" \
     "$(date '+%Y-%m-%d %H:%M:%S')" \
@@ -340,13 +365,12 @@ printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
     "$CPUS" \
     "$MEM" \
     "$PWD" \
-    "$SCRIPT" \
+    "$LOCAL_SCRIPT" \
     "$LOGFILE" \
 >> "$HISTORY_FILE"
 
-
-
 success "Job submitted."
+
 
 echo
 echo "Job ID        : $JOBID"
@@ -383,8 +407,4 @@ then
 fi
 
 
-cat > "$JOB_DIR/${JOBID}.conf" <<EOF
-NODE=$NODE
-LOGFILE=$LOG_DIR/slurm-${JOBID}.out
-EOF
 

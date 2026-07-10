@@ -31,7 +31,7 @@ do
         "$NODE" \
         "$CPUS" \
         "$MEM" \
-        "$RUNTIME" \
+	"$(format_seconds "$RUNTIME")" \
         "$(format_submit_time "$SUBMIT")" \
         "$STATUS"
 done

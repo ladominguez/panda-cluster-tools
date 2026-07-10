@@ -353,7 +353,7 @@ table_history_row()
     local SUBMITTED="$7"
     local STATUS="$8"
 
-    printf "%-5s %-18s %-12s %5s %6s %10s %18s %12s\n" \
+    printf "%-5s %-18s %-12s %5s %6s %12s %20s %12s\n" \
         "$JOBID" \
         "$NAME" \
         "$NODE" \
@@ -367,7 +367,7 @@ table_history_row()
 
 format_submit_time()
 {
-  date -d "$1" '+%H:%M'
+   date -d "$1" '+%Y-%m-%d %H:%M'
 }
 
 
@@ -475,11 +475,17 @@ format_seconds()
 {
     local SEC="$1"
 
+    if [[ "$SEC" == "-" || -z "$SEC" ]]; then
+        echo "-"
+        return
+    fi
+
     printf "%02d:%02d:%02d\n" \
         $((SEC/3600)) \
         $(((SEC%3600)/60)) \
         $((SEC%60))
 }
+
 
 translate_path()
 {
@@ -515,4 +521,25 @@ sync_job_metadata()
         >/dev/null 2>&1
 }
 
+
+push_job_metadata()
+{
+    local JOBID="$1"
+    local NODE="$2"
+
+    #
+    # Local node? Nothing to do.
+    #
+    [[ "$NODE" == "$LOCAL_NODE" ]] && return
+
+    local REMOTE_VAR
+    REMOTE_VAR=$(translate_path "$PANDA_VAR" "$NODE")
+
+    ssh "${SSH_OPTS[@]}" "$NODE" \
+        "mkdir -p '$REMOTE_VAR/jobs'"
+
+    rsync -a \
+        "$JOB_DIR/${JOBID}.conf" \
+        "$NODE:$REMOTE_VAR/jobs/"
+}
 
