@@ -16,6 +16,8 @@ FINISH_TIME=$(date '+%Y-%m-%dT%H:%M:%S')
 
 TMP=$(mktemp)
 
+trap 'rm -f "$TMP"' EXIT
+
 awk -F'\t' -v OFS='\t' \
     -v jobid="$JOBID" \
     -v finish="$FINISH_TIME" \
@@ -28,10 +30,10 @@ NR==1 {
 }
 
 $1==jobid {
-    $3=finish
-    $4=status
-    $5=exitcode
-    $6=runtime
+    $4=finish
+    $5=status
+    $6=exitcode
+    $7=runtime
 }
 
 {
@@ -39,4 +41,11 @@ $1==jobid {
 }
 ' "$HISTORY_FILE" > "$TMP"
 
-mv "$TMP" "$HISTORY_FILE"
+
+
+if mv "$TMP" "$HISTORY_FILE"; then
+    trap - EXIT
+else
+    echo "Failed to update history file." >&2
+    exit 1
+fi

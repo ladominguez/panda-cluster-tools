@@ -1,5 +1,4 @@
-#!/bin/bash
-#
+#!/bin/bash 
 # submit.sh
 #
 # Submit a Python job to the Panda Cluster
@@ -353,8 +352,11 @@ push_job_metadata "$JOBID" "$NODE"
 #
 # Append to history
 #
-printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+USER_NAME=$(id -un)
+
+printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
     "$JOBID" \
+    "$USER_NAME"  \
     "$(date '+%Y-%m-%d %H:%M:%S')" \
     "-" \
     "PENDING" \
