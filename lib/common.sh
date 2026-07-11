@@ -17,10 +17,35 @@ PANDA_VAR="$PANDA_HOME/var"
 JOB_DIR="$PANDA_VAR/jobs"
 HISTORY_FILE="$PANDA_VAR/history.tsv"
 
+HISTORY_COLUMNS=(
+    JobID
+    User
+    SubmitTime
+    FinishTime
+    Status
+    ExitCode
+    Runtime
+    JobName
+    Node
+    CPUs
+    Mem
+    WorkDir
+    Script
+    LogFile
+)
+
+readonly COL_JOBID=1
+readonly COL_USER=2
+readonly COL_SUBMIT=3
+readonly COL_FINISH=4
+readonly COL_STATUS=5
+readonly COL_EXITCODE=6
+readonly COL_RUNTIME=7
+
 mkdir -p "$JOB_DIR"
 
 if [[ ! -f "$HISTORY_FILE" ]]; then
-    printf "JobID\tSubmitTime\tFinishTime\tStatus\tExitCode\tRuntime\tJobName\tNode\tCPUs\tMem\tWorkDir\tScript\tLogFile\n" \
+    printf "JobID\tUser\tSubmitTime\tFinishTime\tStatus\tExitCode\tRuntime\tJobName\tNode\tCPUs\tMem\tWorkDir\tScript\tLogFile\n" \
     > "$HISTORY_FILE"
 fi
 
@@ -328,8 +353,9 @@ progress_bar()
 
 print_history_header()
 {
-    printf "%-5s %-18s %-12s %5s %6s %10s %18s %12s\n" \
+    printf "%-5s %10s  %-18s %-12s %5s %6s %10s %18s %12s\n" \
         "ID" \
+	"User" \
         "Name" \
         "Node" \
         "CPUs" \
@@ -345,16 +371,18 @@ print_history_header()
 table_history_row()
 {
     local JOBID="$1"
-    local NAME="$2"
-    local NODE="$3"
-    local CPUS="$4"
-    local MEM="$5"
-    local RUNTIME="$6"
-    local SUBMITTED="$7"
-    local STATUS="$8"
+    local USER_NAME="$2"
+    local NAME="$3"
+    local NODE="$4"
+    local CPUS="$5"
+    local MEM="$6"
+    local RUNTIME="$7"
+    local SUBMITTED="$8"
+    local STATUS="$9"
 
-    printf "%-5s %-18s %-12s %5s %6s %12s %20s %12s\n" \
+    printf "%-5s %10s %-18s %-12s %5s %6s %12s %20s %12s\n" \
         "$JOBID" \
+	"$USER_NAME" \
         "$NAME" \
         "$NODE" \
         "$CPUS" \

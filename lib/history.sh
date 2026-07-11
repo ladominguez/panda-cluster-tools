@@ -12,6 +12,7 @@ print_history_header
 tail -n +2 "$HISTORY_FILE" | tac |
 while IFS=$'\t' read -r \
     JOBID \
+    USER_NAME \
     SUBMIT \
     FINISH \
     STATUS \
@@ -27,6 +28,7 @@ while IFS=$'\t' read -r \
 do
     table_history_row \
         "$JOBID" \
+	"$USER_NAME" \
         "$JOBNAME" \
         "$NODE" \
         "$CPUS" \
