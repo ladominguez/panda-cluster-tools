@@ -1,3 +1,3 @@
-#panda submit pytorch_train.py  --node xinxin      --env ai-legacy  --job-name pytorch-test 
-panda submit pytorch_train.py  --node tohui       --env ai  --cpus 30 --mem 120 --job-name pytorch-test --wait
-panda submit pytorch_train.py  --node shuanshuan  --env ai  --cpus 7  --mem 60 --job-name pytorch-test --wait
+panda submit pytorch_train.py  --node xinxin      --env ai-legacy --cpus 15 --mem 20 --job-name pytorch-test --wait 
+panda submit pytorch_train.py  --node tohui       --env ai        --cpus 30 --mem 120 --job-name pytorch-test --wait
+panda submit pytorch_train.py  --node shuanshuan  --env ai        --cpus 7  --mem 60 --job-name pytorch-test --wait
