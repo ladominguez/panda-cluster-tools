@@ -21,6 +21,7 @@ MEM="${DEFAULT_MEM:-8G}"
 ALL_NODES=0
 JOB_NAME=""
 SCRIPT=""
+SCRIPT_ARGS=""
 NODE=""
 PARTITION="${DEFAULT_PARTITION:-cpu}"
 WAIT=0
@@ -50,6 +51,8 @@ Options
     --mem SIZE          Memory (e.g. 16G)
 
     --job-name NAME     Job name
+
+    --args ARG          Argument passed to the Python script
 
     --wait              Wait for the job to finish and retrieve the log
 
@@ -105,6 +108,10 @@ do
             JOB_NAME="$2"
             shift 2
             ;;
+	--args)
+	    SCRIPT_ARGS="$2"
+	    shift 2
+	    ;;
 
         -h|--help)
 
@@ -147,58 +154,9 @@ done
 LOCAL_SCRIPT=$(realpath "$SCRIPT")
 REMOTE_SCRIPT="$LOCAL_SCRIPT"
 
-#
-# Translate research paths
-#
-LOCAL_ROOT="${PATH_MAP[$HOSTNAME]}"
-REMOTE_ROOT="${PATH_MAP[$NODE]}"
-
-if [[ -n "$LOCAL_ROOT" && -n "$REMOTE_ROOT" ]]; then
-    REMOTE_SCRIPT="${REMOTE_SCRIPT/$LOCAL_ROOT/$REMOTE_ROOT}"
-fi
-
-#
-# Translate Panda repository paths
-#
-LOCAL_PANDA_ROOT="$PANDA_HOME"
-REMOTE_PANDA_ROOT="${PANDA_ROOT[$NODE]}"
-
-if [[ "$REMOTE_SCRIPT" == "$LOCAL_PANDA_ROOT/"* ]]; then
-    REMOTE_SCRIPT="${REMOTE_SCRIPT/$LOCAL_PANDA_ROOT/$REMOTE_PANDA_ROOT}"
-fi
-
-REMOTE_WORKDIR=$(dirname "$REMOTE_SCRIPT")
-PANDA_REMOTE="${PANDA_ROOT[$NODE]}"
-
-
-case "$REMOTE_SCRIPT" in
-    *.py)
-	RUN_COMMAND="python \"$REMOTE_SCRIPT\""
-        ;;
-
-    *.sh)
-	RUN_COMMAND="bash \"$REMOTE_SCRIPT\""
-        ;;
-
-    *.jl)
-	RUN_COMMAND="julia \"$REMOTE_SCRIPT\""
-        ;;
-
-    *)
-        if [[ -x "$SCRIPT" ]]; then
-            RUN_COMMAND="\"$SCRIPT\""
-        else
-            die "Unsupported file type: $(basename "$SCRIPT")"
-        fi
-        ;;
-esac
-
-
-if [[ -z "$JOB_NAME" ]]
-then
-    JOB_NAME=$(basename "$LOCAL_SCRIPT")
-    JOB_NAME="${JOB_NAME%.*}"
-fi
+############################################################
+# Validate mutually exclusive node selection options
+############################################################
 
 COUNT=0
 
@@ -217,14 +175,80 @@ fi
 
 if [[ -n "$GPU" ]]
 then
-
     NODE="${GPU_NODE[$GPU]}"
 
     [[ -n "$NODE" ]] \
         || die "Unknown GPU '$GPU'."
+fi
 
+############################################################
+# Translate paths
+############################################################
+
+LOCAL_ROOT="${PATH_MAP[$HOSTNAME]}"
+LOCAL_REPO_ROOT="${REPO_MAP[$HOSTNAME]}"
+
+if [[ -n "$NODE" ]]; then
+
+    REMOTE_ROOT="${PATH_MAP[$NODE]}"
+    REMOTE_REPO_ROOT="${REPO_MAP[$NODE]}"
+
+    # Research path
+    if [[ -n "$REMOTE_ROOT" && -n "$LOCAL_ROOT" ]]; then
+        REMOTE_SCRIPT="${LOCAL_SCRIPT/$LOCAL_ROOT/$REMOTE_ROOT}"
+    fi
+
+    # Repository path
+    if [[ -n "$REMOTE_REPO_ROOT" && -n "$LOCAL_REPO_ROOT" ]]; then
+        REMOTE_SCRIPT="${REMOTE_SCRIPT/$LOCAL_REPO_ROOT/$REMOTE_REPO_ROOT}"
+    fi
+
+else
+
+    # SLURM will choose the execution node.
+    # The repository path will be resolved inside the job.
+    REMOTE_SCRIPT="$LOCAL_SCRIPT"
 
 fi
+
+############################################################
+# Panda repository path
+############################################################
+
+LOCAL_PANDA_ROOT="$PANDA_HOME"
+
+if [[ -n "$NODE" ]]; then
+    REMOTE_PANDA_ROOT="${PANDA_ROOT[$NODE]}"
+
+    if [[ "$REMOTE_SCRIPT" == "$LOCAL_PANDA_ROOT/"* ]]; then
+        REMOTE_SCRIPT="${REMOTE_SCRIPT/$LOCAL_PANDA_ROOT/$REMOTE_PANDA_ROOT}"
+    fi
+
+    PANDA_REMOTE="$REMOTE_PANDA_ROOT"
+else
+    PANDA_REMOTE=""
+fi
+
+############################################################
+# Working directory
+############################################################
+
+if [[ -n "$NODE" ]]; then
+    REMOTE_WORKDIR="$(dirname "$REMOTE_SCRIPT")"
+else
+    REMOTE_WORKDIR=""
+fi
+
+############################################################
+# Job name
+############################################################
+
+if [[ -z "$JOB_NAME" ]]
+then
+    JOB_NAME=$(basename "$LOCAL_SCRIPT")
+    JOB_NAME="${JOB_NAME%.*}"
+fi
+
 
 ############################################################
 # Create temporary Slurm script
@@ -239,53 +263,253 @@ cat > "$TMPFILE" <<EOF
 #SBATCH --cpus-per-task=$CPUS
 #SBATCH --mem=$MEM
 #SBATCH --output=$LOG_DIR/slurm-%j.out
+
+EOF
+
+if [[ -n "$NODE" ]]; then
+    cat >> "$TMPFILE" <<EOF
+#SBATCH --nodelist=$NODE
 #SBATCH --chdir=$REMOTE_WORKDIR
 EOF
-
-if [[ -n "$NODE" ]]
-then
-
-cat >> "$TMPFILE" <<EOF
-#SBATCH --nodelist=$NODE
-#SBATCH --gres=gpu:1
-EOF
-
 fi
 
+if [[ -n "$GPU" ]]; then
+    cat >> "$TMPFILE" <<EOF
+#SBATCH --gres=gpu:1
+EOF
+fi
 
 cat >> "$TMPFILE" <<EOF
 
-
-# Initialize Conda on the execution node
+# Values determined on the submission node
+LOCAL_SCRIPT="$LOCAL_SCRIPT"
+LOCAL_REPO_ROOT="$LOCAL_REPO_ROOT"
 
 # Initialize Conda
 eval "\$(conda shell.bash hook)"
-
-
 conda activate "$ENV"
 
-cd "$REMOTE_WORKDIR" || exit 1
+############################################################
+# Resolve paths on the execution node
+############################################################
 
-type -a panda
+if [[ -z "$NODE" ]]; then
+
+    case "\$SLURMD_NODENAME" in
+        shuanshuan)
+            REMOTE_REPO_ROOT="/home/lantonio/Repositories"
+            PANDA_REMOTE="/home/lantonio/Repositories/panda-cluster-tools"
+            ;;
+        tohui)
+            REMOTE_REPO_ROOT="/data/antonio/Repositories"
+            PANDA_REMOTE="/data/antonio/Repositories/panda-cluster-tools"
+            ;;
+        xinxin)
+            REMOTE_REPO_ROOT="/home/lantonio/Repositories"
+            PANDA_REMOTE="/home/lantonio/Repositories/panda-cluster-tools"
+            ;;
+        *)
+            echo "[FAIL] Unknown execution node: \$SLURMD_NODENAME"
+            exit 1
+            ;;
+    esac
+
+    REMOTE_SCRIPT="\$LOCAL_SCRIPT"
+
+    if [[ -n "\$LOCAL_REPO_ROOT" ]]; then
+        REMOTE_SCRIPT="\${REMOTE_SCRIPT/\$LOCAL_REPO_ROOT/\$REMOTE_REPO_ROOT}"
+    fi
+
+else
+
+    REMOTE_SCRIPT="$REMOTE_SCRIPT"
+    PANDA_REMOTE="$PANDA_REMOTE"
+
+fi
+
+REMOTE_WORKDIR="\$(dirname "\$REMOTE_SCRIPT")"
+
+cd "\$REMOTE_WORKDIR" || exit 1
+
+echo "Running on node: \$SLURMD_NODENAME"
+echo "Script:          \$REMOTE_SCRIPT"
+echo "Working dir:     \$REMOTE_WORKDIR"
+echo "Panda:           \$PANDA_REMOTE"
 
 START=\$(date +%s)
 
-$RUN_COMMAND
+############################################################
+# Execute program
+############################################################
+
+case "\$REMOTE_SCRIPT" in
+
+    *.py)
+        python "\$REMOTE_SCRIPT" "$SCRIPT_ARGS"
+        ;;
+
+    *.sh)
+        bash "\$REMOTE_SCRIPT"
+        ;;
+
+    *.jl)
+        julia "\$REMOTE_SCRIPT"
+        ;;
+
+    *)
+        if [[ -x "\$REMOTE_SCRIPT" ]]; then
+            "\$REMOTE_SCRIPT"
+        else
+            echo "[FAIL] Unsupported file type: \$REMOTE_SCRIPT"
+            exit 1
+        fi
+        ;;
+
+esac
 
 EXITCODE=\$?
 
 END=\$(date +%s)
 RUNTIME=\$((END-START))
 
-
-"$PANDA_REMOTE/bin/panda" finish \
+"\$PANDA_REMOTE/bin/panda" finish \
     "\$SLURM_JOB_ID" \
     "\$EXITCODE" \
     "\$RUNTIME"
 
-
 exit "\$EXITCODE"
 
+EOF
+
+
+############################################################
+# Create temporary Slurm script
+############################################################
+
+TMPFILE=$(mktemp /tmp/panda-submit-XXXXXX.slurm)
+
+cat > "$TMPFILE" <<EOF
+#!/bin/bash
+#SBATCH --job-name=$JOB_NAME
+#SBATCH --partition=$PARTITION
+#SBATCH --cpus-per-task=$CPUS
+#SBATCH --mem=$MEM
+#SBATCH --output=$LOG_DIR/slurm-%j.out
+
+EOF
+
+if [[ -n "$NODE" ]]; then
+    cat >> "$TMPFILE" <<EOF
+#SBATCH --nodelist=$NODE
+#SBATCH --chdir=$REMOTE_WORKDIR
+EOF
+fi
+
+if [[ -n "$GPU" ]]; then
+    cat >> "$TMPFILE" <<EOF
+#SBATCH --gres=gpu:1
+EOF
+fi
+
+cat >> "$TMPFILE" <<EOF
+
+# Values determined on the submission node
+LOCAL_SCRIPT="$LOCAL_SCRIPT"
+LOCAL_REPO_ROOT="$LOCAL_REPO_ROOT"
+
+# Initialize Conda
+eval "\$(conda shell.bash hook)"
+conda activate "$ENV"
+
+############################################################
+# Resolve paths on the execution node
+############################################################
+
+if [[ -z "$NODE" ]]; then
+
+    case "\$SLURMD_NODENAME" in
+        shuanshuan)
+            REMOTE_REPO_ROOT="/home/lantonio/Repositories"
+            PANDA_REMOTE="/home/lantonio/Repositories/panda-cluster-tools"
+            ;;
+        tohui)
+            REMOTE_REPO_ROOT="/data/antonio/Repositories"
+            PANDA_REMOTE="/data/antonio/Repositories/panda-cluster-tools"
+            ;;
+        xinxin)
+            REMOTE_REPO_ROOT="/home/lantonio/Repositories"
+            PANDA_REMOTE="/home/lantonio/Repositories/panda-cluster-tools"
+            ;;
+        *)
+            echo "[FAIL] Unknown execution node: \$SLURMD_NODENAME"
+            exit 1
+            ;;
+    esac
+
+    REMOTE_SCRIPT="\$LOCAL_SCRIPT"
+
+    if [[ -n "\$LOCAL_REPO_ROOT" ]]; then
+        REMOTE_SCRIPT="\${REMOTE_SCRIPT/\$LOCAL_REPO_ROOT/\$REMOTE_REPO_ROOT}"
+    fi
+
+else
+
+    REMOTE_SCRIPT="$REMOTE_SCRIPT"
+    PANDA_REMOTE="$PANDA_REMOTE"
+
+fi
+
+REMOTE_WORKDIR="\$(dirname "\$REMOTE_SCRIPT")"
+
+cd "\$REMOTE_WORKDIR" || exit 1
+
+echo "Running on node: \$SLURMD_NODENAME"
+echo "Script:          \$REMOTE_SCRIPT"
+echo "Working dir:     \$REMOTE_WORKDIR"
+echo "Panda:           \$PANDA_REMOTE"
+
+START=\$(date +%s)
+
+############################################################
+# Execute program
+############################################################
+
+case "\$REMOTE_SCRIPT" in
+
+    *.py)
+        python "\$REMOTE_SCRIPT" "$SCRIPT_ARGS"
+        ;;
+
+    *.sh)
+        bash "\$REMOTE_SCRIPT"
+        ;;
+
+    *.jl)
+        julia "\$REMOTE_SCRIPT"
+        ;;
+
+    *)
+        if [[ -x "\$REMOTE_SCRIPT" ]]; then
+            "\$REMOTE_SCRIPT"
+        else
+            echo "[FAIL] Unsupported file type: \$REMOTE_SCRIPT"
+            exit 1
+        fi
+        ;;
+
+esac
+
+EXITCODE=\$?
+
+END=\$(date +%s)
+RUNTIME=\$((END-START))
+
+"\$PANDA_REMOTE/bin/panda" finish \
+    "\$SLURM_JOB_ID" \
+    "\$EXITCODE" \
+    "\$RUNTIME"
+
+exit "\$EXITCODE"
 
 EOF
 
@@ -302,6 +526,11 @@ echo "Job Name      : $JOB_NAME"
 echo "Environment   : $ENV"
 echo "CPUs          : $CPUS"
 echo "Memory        : $MEM"
+
+if [[ -n "$SCRIPT_ARGS" ]]
+then
+    echo "Arguments     : $SCRIPT_ARGS"
+fi
 
 if [[ -n "$NODE" ]]
 then
