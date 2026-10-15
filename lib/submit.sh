@@ -477,7 +477,11 @@ START=\$(date +%s)
 case "\$REMOTE_SCRIPT" in
 
     *.py)
-        python "\$REMOTE_SCRIPT" "$SCRIPT_ARGS"
+        if [[ -n "$SCRIPT_ARGS" ]]; then
+            python "\$REMOTE_SCRIPT" "$SCRIPT_ARGS"
+        else
+            python "\$REMOTE_SCRIPT"
+        fi
         ;;
 
     *.sh)
