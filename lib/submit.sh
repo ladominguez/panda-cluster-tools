@@ -1,7 +1,7 @@
 #!/bin/bash 
 # submit.sh
 #
-# Submit a Python job to the Panda Cluster
+# Submit a program to the Panda Cluster
 #
 
 
@@ -21,7 +21,7 @@ MEM="${DEFAULT_MEM:-8G}"
 ALL_NODES=0
 JOB_NAME=""
 SCRIPT=""
-SCRIPT_ARGS=""
+SCRIPT_ARGS=()
 NODE=""
 PARTITION="${DEFAULT_PARTITION:-cpu}"
 WAIT=0
@@ -36,7 +36,7 @@ cat <<EOF
 
 Usage:
 
-    panda submit program.py [options]
+    panda submit program [options] [-- program-arguments...]
 
 Options
 
@@ -52,7 +52,9 @@ Options
 
     --job-name NAME     Job name
 
-    --args ARG          Argument passed to the Python script
+    --args ARG          Append one program argument (repeatable; preserves spaces)
+
+    -- ARGS...          Pass all remaining arguments directly to the program
 
     --wait              Wait for the job to finish and retrieve the log
 
@@ -65,8 +67,25 @@ EOF
 # Parse command line
 ############################################################
 
+require_value()
+{
+    [[ $# -ge 2 ]] || die "Option '$1' requires a value."
+    if [[ "$1" != --args ]]; then
+        [[ -n "$2" && "$2" != --* ]] \
+            || die "Option '$1' requires a value."
+    fi
+}
+
 while [[ $# -gt 0 ]]
 do
+
+    # Reject missing values before shift 2, which otherwise leaves the parser
+    # looping forever. Empty strings are valid program arguments.
+    case "$1" in
+        --gpu|--env|--cpus|--node|--mem|--job-name|--args)
+            require_value "$@"
+            ;;
+    esac
 
     case "$1" in
 
@@ -109,9 +128,16 @@ do
             shift 2
             ;;
 	--args)
-	    SCRIPT_ARGS="$2"
+	    SCRIPT_ARGS+=("$2")
 	    shift 2
 	    ;;
+
+        --)
+            [[ -n "$SCRIPT" ]] || die "Specify the program before '--'."
+            shift
+            SCRIPT_ARGS+=("$@")
+            break
+            ;;
 
         -h|--help)
 
@@ -130,7 +156,7 @@ do
             then
                 SCRIPT="$1"
             else
-                die "Only one Python script may be submitted."
+                die "Use '--' before program arguments, or repeat '--args ARG'."
             fi
 
             shift
@@ -146,7 +172,7 @@ done
 ############################################################
 
 [[ -n "$SCRIPT" ]] \
-    || die "No Python script specified."
+    || die "No program specified."
 
 [[ -f "$SCRIPT" ]] \
     || die "Cannot find '$SCRIPT'."
@@ -254,6 +280,13 @@ fi
 # Create temporary Slurm script
 ############################################################
 
+# Serialize each argument as a Bash literal. Never evaluate user arguments as
+# shell code; preserve exact argv boundaries in the generated batch script.
+SCRIPT_ARGS_SHELL=""
+if [[ ${#SCRIPT_ARGS[@]} -gt 0 ]]; then
+    printf -v SCRIPT_ARGS_SHELL ' %q' "${SCRIPT_ARGS[@]}"
+fi
+
 TMPFILE=$(mktemp /tmp/panda-submit-XXXXXX.slurm)
 
 cat > "$TMPFILE" <<EOF
@@ -284,6 +317,7 @@ cat >> "$TMPFILE" <<EOF
 # Values determined on the submission node
 LOCAL_SCRIPT="$LOCAL_SCRIPT"
 LOCAL_REPO_ROOT="$LOCAL_REPO_ROOT"
+SCRIPT_ARGS=($SCRIPT_ARGS_SHELL)
 
 # Initialize Conda
 eval "\$(conda shell.bash hook)"
@@ -345,156 +379,20 @@ START=\$(date +%s)
 case "\$REMOTE_SCRIPT" in
 
     *.py)
-        python "\$REMOTE_SCRIPT" "$SCRIPT_ARGS"
+        python "\$REMOTE_SCRIPT" "\${SCRIPT_ARGS[@]}"
         ;;
 
     *.sh)
-        bash "\$REMOTE_SCRIPT"
+        bash "\$REMOTE_SCRIPT" "\${SCRIPT_ARGS[@]}"
         ;;
 
     *.jl)
-        julia "\$REMOTE_SCRIPT"
+        julia "\$REMOTE_SCRIPT" "\${SCRIPT_ARGS[@]}"
         ;;
 
     *)
         if [[ -x "\$REMOTE_SCRIPT" ]]; then
-            "\$REMOTE_SCRIPT"
-        else
-            echo "[FAIL] Unsupported file type: \$REMOTE_SCRIPT"
-            exit 1
-        fi
-        ;;
-
-esac
-
-EXITCODE=\$?
-
-END=\$(date +%s)
-RUNTIME=\$((END-START))
-
-"\$PANDA_REMOTE/bin/panda" finish \
-    "\$SLURM_JOB_ID" \
-    "\$EXITCODE" \
-    "\$RUNTIME"
-
-exit "\$EXITCODE"
-
-EOF
-
-
-############################################################
-# Create temporary Slurm script
-############################################################
-
-TMPFILE=$(mktemp /tmp/panda-submit-XXXXXX.slurm)
-
-cat > "$TMPFILE" <<EOF
-#!/bin/bash
-#SBATCH --job-name=$JOB_NAME
-#SBATCH --partition=$PARTITION
-#SBATCH --cpus-per-task=$CPUS
-#SBATCH --mem=$MEM
-#SBATCH --output=$LOG_DIR/slurm-%j.out
-
-EOF
-
-if [[ -n "$NODE" ]]; then
-    cat >> "$TMPFILE" <<EOF
-#SBATCH --nodelist=$NODE
-#SBATCH --chdir=$REMOTE_WORKDIR
-EOF
-fi
-
-if [[ -n "$GPU" ]]; then
-    cat >> "$TMPFILE" <<EOF
-#SBATCH --gres=gpu:1
-EOF
-fi
-
-cat >> "$TMPFILE" <<EOF
-
-# Values determined on the submission node
-LOCAL_SCRIPT="$LOCAL_SCRIPT"
-LOCAL_REPO_ROOT="$LOCAL_REPO_ROOT"
-
-# Initialize Conda
-eval "\$(conda shell.bash hook)"
-conda activate "$ENV"
-
-############################################################
-# Resolve paths on the execution node
-############################################################
-
-if [[ -z "$NODE" ]]; then
-
-    case "\$SLURMD_NODENAME" in
-        shuanshuan)
-            REMOTE_REPO_ROOT="/home/lantonio/Repositories"
-            PANDA_REMOTE="/home/lantonio/Repositories/panda-cluster-tools"
-            ;;
-        tohui)
-            REMOTE_REPO_ROOT="/data/antonio/Repositories"
-            PANDA_REMOTE="/data/antonio/Repositories/panda-cluster-tools"
-            ;;
-        xinxin)
-            REMOTE_REPO_ROOT="/home/lantonio/Repositories"
-            PANDA_REMOTE="/home/lantonio/Repositories/panda-cluster-tools"
-            ;;
-        *)
-            echo "[FAIL] Unknown execution node: \$SLURMD_NODENAME"
-            exit 1
-            ;;
-    esac
-
-    REMOTE_SCRIPT="\$LOCAL_SCRIPT"
-
-    if [[ -n "\$LOCAL_REPO_ROOT" ]]; then
-        REMOTE_SCRIPT="\${REMOTE_SCRIPT/\$LOCAL_REPO_ROOT/\$REMOTE_REPO_ROOT}"
-    fi
-
-else
-
-    REMOTE_SCRIPT="$REMOTE_SCRIPT"
-    PANDA_REMOTE="$PANDA_REMOTE"
-
-fi
-
-REMOTE_WORKDIR="\$(dirname "\$REMOTE_SCRIPT")"
-
-cd "\$REMOTE_WORKDIR" || exit 1
-
-echo "Running on node: \$SLURMD_NODENAME"
-echo "Script:          \$REMOTE_SCRIPT"
-echo "Working dir:     \$REMOTE_WORKDIR"
-echo "Panda:           \$PANDA_REMOTE"
-
-START=\$(date +%s)
-
-############################################################
-# Execute program
-############################################################
-
-case "\$REMOTE_SCRIPT" in
-
-    *.py)
-        if [[ -n "$SCRIPT_ARGS" ]]; then
-            python "\$REMOTE_SCRIPT" "$SCRIPT_ARGS"
-        else
-            python "\$REMOTE_SCRIPT"
-        fi
-        ;;
-
-    *.sh)
-        bash "\$REMOTE_SCRIPT"
-        ;;
-
-    *.jl)
-        julia "\$REMOTE_SCRIPT"
-        ;;
-
-    *)
-        if [[ -x "\$REMOTE_SCRIPT" ]]; then
-            "\$REMOTE_SCRIPT"
+            "\$REMOTE_SCRIPT" "\${SCRIPT_ARGS[@]}"
         else
             echo "[FAIL] Unsupported file type: \$REMOTE_SCRIPT"
             exit 1
@@ -531,9 +429,11 @@ echo "Environment   : $ENV"
 echo "CPUs          : $CPUS"
 echo "Memory        : $MEM"
 
-if [[ -n "$SCRIPT_ARGS" ]]
+if [[ ${#SCRIPT_ARGS[@]} -gt 0 ]]
 then
-    echo "Arguments     : $SCRIPT_ARGS"
+    printf 'Arguments     :'
+    printf ' %q' "${SCRIPT_ARGS[@]}"
+    printf '\n'
 fi
 
 if [[ -n "$NODE" ]]
