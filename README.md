@@ -132,6 +132,46 @@ This command provides a quick overview of the entire cluster and is typically th
 
 ---
 
+## panda submit
+
+Submit Python, Bash, Julia, or executable programs. Put Panda options before
+`--`; everything after `--` is passed directly to the program:
+
+```bash
+# No program arguments
+panda submit program.py --node tohui --env crsmex
+
+# Existing single-station syntax continues to work
+panda submit find_repeaters_v2026.py --args ARIG --node tohui --env crsmex
+
+# Multiple arguments, including a value containing spaces
+panda submit program.py --node tohui --cpus 2 --mem 8G -- --station ARIG --output "results/ARIG picks"
+
+# Alternatively, append one argument at a time
+panda submit program.py --node tohui --args ARIG --args "value with spaces" --args ""
+```
+
+Each `--args ARG` appends exactly one argument; repeated uses retain their order.
+A quoted string such as `--args "--station ARIG"` is one literal argument, not
+two. Use `-- --station ARIG` to pass two arguments. Arguments from repeated
+`--args` options are followed by any arguments after `--`.
+
+Omitting arguments passes no extra arguments. Explicit empty strings, spaces,
+quotes, and literal shell characters are preserved through batch-script
+generation. Program arguments are not evaluated as shell commands. After `--`,
+options such as `--cpus` belong to the program, not Panda.
+
+### Argument-handling tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+These tests capture generated batch scripts with a fake `sbatch` and execute
+them locally. They require Python 3 and Bash, with no Slurm, Conda, network, or
+GPU access. Julia dispatch uses a stub interpreter; actual Julia execution and
+live cluster placement still require a cluster smoke test.
+
 ## panda gpu
 
 Display detailed information for every GPU in the cluster.
